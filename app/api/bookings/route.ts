@@ -55,12 +55,11 @@ export async function POST(request: NextRequest) {
     await createBooking(bookingData);
     // Send confirmation email
     try {
-      await sendBookingConfirmation(bookingData, service);        } catch (emailError) {
-      console.error('Failed to send email:', emailError);
+            await sendBookingConfirmation(bookingData, { id: serviceId, ...service });
+          } catch (emailError) {
+            console.error('Failed to send email:', emailError);
       // Don't fail the booking if email fails
     }
-
-    return NextResponse.json({
       success: true,
       bookingData,    });
   } catch (error) {
