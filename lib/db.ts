@@ -14,6 +14,18 @@ export interface Booking {
   created_at?: string;
 }
 
+// Service type definition
+export interface Service {
+  id: string;
+  name: string;
+  duration: number;
+  price: number;
+  description?: string;
+  is_active?: number;
+  sort_order?: number;
+  created_at?: string;
+}
+
 // Track initialization state
 let isInitialized = false;
 
