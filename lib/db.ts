@@ -1,7 +1,23 @@
 import { sql } from '@vercel/postgres';
 
-// Initialize database tables
-export async function initializeDb() {
+// Track initialization state
+let isInitialized = false;
+
+// Lazy initialization - only runs when actually called at runtime
+async function ensureInitialized() {
+  if (isInitialized) return;
+  
+  try {
+    await initializeDb();
+    isInitialized = true;
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    // Don't throw - allow retry on next request
+  }
+}
+
+// Initialize database tables - NOT exported, only called via ensureInitialized
+async function initializeDb() {
   // Business configuration table
   await sql`
     CREATE TABLE IF NOT EXISTS config (
@@ -77,12 +93,14 @@ export async function initializeDb() {
 
 // Get business configuration
 export async function getConfig() {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM config WHERE id = 1`;
   return result.rows[0] || null;
 }
 
 // Update business configuration
 export async function updateConfig(config: any) {
+  await ensureInitialized();
   await sql`
     UPDATE config
     SET business_name = ${config.business_name},
@@ -99,18 +117,21 @@ export async function updateConfig(config: any) {
 
 // Get all services
 export async function getServices() {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order, name`;
   return result.rows;
 }
 
 // Get service by ID
 export async function getServiceById(id: string) {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM services WHERE id = ${id}`;
   return result.rows[0] || null;
 }
 
 // Create service
 export async function createService(service: any) {
+  await ensureInitialized();
   await sql`
     INSERT INTO services (id, name, duration, price, description, is_active, sort_order)
     VALUES (${service.id}, ${service.name}, ${service.duration}, ${service.price}, ${service.description}, ${service.is_active}, ${service.sort_order})`;
@@ -118,6 +139,7 @@ export async function createService(service: any) {
 
 // Update service
 export async function updateService(id: string, service: any) {
+  await ensureInitialized();
   await sql`
     UPDATE services
     SET name = ${service.name},
@@ -131,11 +153,13 @@ export async function updateService(id: string, service: any) {
 
 // Delete service
 export async function deleteService(id: string) {
+  await ensureInitialized();
   await sql`DELETE FROM services WHERE id = ${id}`;
 }
 
 // Get business hours
 export async function getBusinessHours() {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM business_hours ORDER BY 
     CASE day_of_week
       WHEN 'Monday' THEN 1
@@ -151,6 +175,7 @@ export async function getBusinessHours() {
 
 // Update business hours
 export async function updateBusinessHours(day: string, hours: any) {
+  await ensureInitialized();
   await sql`
     UPDATE business_hours
     SET is_open = ${hours.is_open},
@@ -161,6 +186,7 @@ export async function updateBusinessHours(day: string, hours: any) {
 
 // Get all bookings
 export async function getAllBookings(filters?: any) {
+  await ensureInitialized();
   let query = 'SELECT * FROM bookings WHERE 1=1';
   const params: any[] = [];
   
@@ -182,12 +208,14 @@ export async function getAllBookings(filters?: any) {
 
 // Get booking by ID
 export async function getBookingById(id: string) {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM bookings WHERE id = ${id}`;
   return result.rows[0] || null;
 }
 
 // Create booking
 export async function createBooking(booking: any) {
+  await ensureInitialized();
   await sql`
     INSERT INTO bookings (id, service_id, customer_name, customer_email, customer_phone, booking_date, booking_time, status, notes)
     VALUES (${booking.id}, ${booking.service_id}, ${booking.customer_name}, ${booking.customer_email}, ${booking.customer_phone}, ${booking.booking_date}, ${booking.booking_time}, ${booking.status}, ${booking.notes})`;
@@ -195,6 +223,7 @@ export async function createBooking(booking: any) {
 
 // Update booking
 export async function updateBooking(id: string, booking: any) {
+  await ensureInitialized();
   await sql`
     UPDATE bookings
     SET service_id = ${booking.service_id},
@@ -210,17 +239,20 @@ export async function updateBooking(id: string, booking: any) {
 
 // Delete booking
 export async function deleteBooking(id: string) {
+  await ensureInitialized();
   await sql`DELETE FROM bookings WHERE id = ${id}`;
 }
 
 // Get bookings for a specific date
 export async function getBookingsByDate(date: string) {
+  await ensureInitialized();
   const result = await sql`SELECT * FROM bookings WHERE booking_date = ${date} ORDER BY booking_time`;
   return result.rows;
 }
 
 // Check if time slot is available
 export async function isTimeSlotAvailable(serviceId: string, date: string, time: string) {
+  await ensureInitialized();
   const result = await sql`
     SELECT COUNT(*) as count
     FROM bookings
