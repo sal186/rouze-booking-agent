@@ -1,33 +1,11 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { sql } from '@vercel/postgres';
 
-// Database file location
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'bookings.db');
-
-// Singleton database instance
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!db) {
-    // Ensure data directory exists
-    const fs = require('fs');
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    initializeDb(db);
-  }
-  return db;
-}
-
-function initializeDb(db: Database.Database) {
+// Initialize database tables
+export async function initializeDb() {
   // Business configuration table
-  db.exec(`
+  await sql`
     CREATE TABLE IF NOT EXISTS config (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
+      id INTEGER PRIMARY KEY DEFAULT 1,
       business_name TEXT NOT NULL DEFAULT 'Your Business',
       business_email TEXT,
       business_phone TEXT,
@@ -36,13 +14,13 @@ function initializeDb(db: Database.Database) {
       max_bookings_per_day INTEGER DEFAULT 8,
       brand_color TEXT DEFAULT '#2563eb',
       google_calendar_id TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT config_one_row CHECK (id = 1)
+    )`;
 
   // Services table
-  db.exec(`
+  await sql`
     CREATE TABLE IF NOT EXISTS services (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -51,289 +29,204 @@ function initializeDb(db: Database.Database) {
       description TEXT,
       is_active INTEGER DEFAULT 1,
       sort_order INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`;
 
   // Business hours table
-  db.exec(`
+  await sql`
     CREATE TABLE IF NOT EXISTS business_hours (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       day_of_week TEXT NOT NULL UNIQUE,
-      open_time TEXT NOT NULL DEFAULT '09:00',
-      close_time TEXT NOT NULL DEFAULT '17:00',
-      is_enabled INTEGER DEFAULT 1
-    );
-  `);
+      is_open INTEGER DEFAULT 1,
+      open_time TEXT,
+      close_time TEXT
+    )`;
 
   // Bookings table
-  db.exec(`
+  await sql`
     CREATE TABLE IF NOT EXISTS bookings (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
-      booking_date TEXT NOT NULL,
-      booking_time TEXT NOT NULL,
-      duration INTEGER NOT NULL,
       customer_name TEXT NOT NULL,
       customer_email TEXT NOT NULL,
       customer_phone TEXT,
-      notes TEXT,
+      booking_date TEXT NOT NULL,
+      booking_time TEXT NOT NULL,
       status TEXT DEFAULT 'confirmed',
-      google_event_id TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (service_id) REFERENCES services(id)
-    );
-  `);
+    )`;
 
-  // Create indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(booking_date);
-    CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-    CREATE INDEX IF NOT EXISTS idx_services_active ON services(is_active);
-  `);
+  // Insert default config if not exists
+  await sql`
+    INSERT INTO config (id, business_name)
+    VALUES (1, 'Your Business')
+    ON CONFLICT (id) DO NOTHING`;
 
-  // Insert default config
-  const configExists = db.prepare('SELECT COUNT(*) as count FROM config').get() as { count: number };
-  if (configExists.count === 0) {
-    db.prepare('INSERT INTO config (id, business_name) VALUES (1, \'Your Business\')').run();
-  }
-
-  // Insert default business hours
-  const hoursExist = db.prepare('SELECT COUNT(*) as count FROM business_hours').get() as { count: number };
-  if (hoursExist.count === 0) {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const insertHours = db.prepare('INSERT INTO business_hours (day_of_week, open_time, close_time, is_enabled) VALUES (?, ?, ?, ?)');
-    for (const day of days) {
-      const isWeekend = day === 'sunday' || day === 'saturday';
-      insertHours.run(day, '09:00', '17:00', isWeekend ? 0 : 1);
-    }
-  }
-
-  // Insert default services
-  const servicesExist = db.prepare('SELECT COUNT(*) as count FROM services').get() as { count: number };
-  if (servicesExist.count === 0) {
-    const insertService = db.prepare('INSERT INTO services (id, name, duration, price, sort_order) VALUES (?, ?, ?, ?, ?)');
-    insertService.run('svc_intro', 'Intro Call', 30, 0, 1);
-    insertService.run('svc_consult', 'Consultation', 60, 150, 2);
-    insertService.run('svc_strategy', 'Strategy Session', 90, 250, 3);
+  // Insert default business hours if not exists
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  for (const day of days) {
+    const isOpen = day !== 'Saturday' && day !== 'Sunday' ? 1 : 0;
+    await sql`
+      INSERT INTO business_hours (day_of_week, is_open, open_time, close_time)
+      VALUES (${day}, ${isOpen}, '09:00', '17:00')
+      ON CONFLICT (day_of_week) DO NOTHING`;
   }
 }
 
-// Type definitions
-export interface Config {
-  id: number;
-  business_name: string;
-  business_email: string | null;
-  business_phone: string | null;
-  timezone: string;
-  buffer_minutes: number;
-  max_bookings_per_day: number;
-  brand_color: string;
-  google_calendar_id: string | null;
+// Get business configuration
+export async function getConfig() {
+  const result = await sql`SELECT * FROM config WHERE id = 1`;
+  return result.rows[0] || null;
 }
 
-export interface Service {
-  id: string;
-  name: string;
-  duration: number;
-  price: number;
-  description: string | null;
-  is_active: number;
-  sort_order: number;
+// Update business configuration
+export async function updateConfig(config: any) {
+  await sql`
+    UPDATE config
+    SET business_name = ${config.business_name},
+        business_email = ${config.business_email},
+        business_phone = ${config.business_phone},
+        timezone = ${config.timezone},
+        buffer_minutes = ${config.buffer_minutes},
+        max_bookings_per_day = ${config.max_bookings_per_day},
+        brand_color = ${config.brand_color},
+        google_calendar_id = ${config.google_calendar_id},
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = 1`;
 }
 
-export interface BusinessHours {
-  id: number;
-  day_of_week: string;
-  open_time: string;
-  close_time: string;
-  is_enabled: number;
+// Get all services
+export async function getServices() {
+  const result = await sql`SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order, name`;
+  return result.rows;
 }
 
-export interface Booking {
-  id: string;
-  service_id: string;
-  booking_date: string;
-  booking_time: string;
-  duration: number;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string | null;
-  notes: string | null;
-  status: string;
-  google_event_id: string | null;
-  created_at: string;
-  updated_at: string;
+// Get service by ID
+export async function getServiceById(id: string) {
+  const result = await sql`SELECT * FROM services WHERE id = ${id}`;
+  return result.rows[0] || null;
 }
 
-// Database helper functions
-export function getConfig(): Config {
-  const db = getDb();
-  return db.prepare('SELECT * FROM config WHERE id = 1').get() as Config;
-}
-
-export function updateConfig(config: Partial<Config>): void {
-  const db = getDb();
-  const fields = Object.keys(config).filter(k => k !== 'id');
-  const setClause = fields.map(f => `${f} = @${f}`).join(', ');
-  db.prepare(`UPDATE config SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).run(config);
-}
-
-export function getServices(activeOnly = true): Service[] {
-  const db = getDb();
-  const query = activeOnly
-    ? 'SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order'
-    : 'SELECT * FROM services ORDER BY sort_order';
-  return db.prepare(query).all() as Service[];
-}
-
-export function getService(id: string): Service | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM services WHERE id = ?').get(id) as Service | undefined;
-}
-
-export function upsertService(service: Partial<Service> & { id: string }): void {
-  const db = getDb();
-  db.prepare(`
+// Create service
+export async function createService(service: any) {
+  await sql`
     INSERT INTO services (id, name, duration, price, description, is_active, sort_order)
-    VALUES (@id, @name, @duration, @price, @description, @is_active, @sort_order)
-    ON CONFLICT(id) DO UPDATE SET
-      name = @name,
-      duration = @duration,
-      price = @price,
-      description = @description,
-      is_active = @is_active,
-      sort_order = @sort_order
-  `).run({
-    id: service.id,
-    name: service.name || 'New Service',
-    duration: service.duration || 30,
-    price: service.price || 0,
-    description: service.description || null,
-    is_active: service.is_active ?? 1,
-    sort_order: service.sort_order || 0,
-  });
+    VALUES (${service.id}, ${service.name}, ${service.duration}, ${service.price}, ${service.description}, ${service.is_active}, ${service.sort_order})`;
 }
 
-export function deleteService(id: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM services WHERE id = ?').run(id);
+// Update service
+export async function updateService(id: string, service: any) {
+  await sql`
+    UPDATE services
+    SET name = ${service.name},
+        duration = ${service.duration},
+        price = ${service.price},
+        description = ${service.description},
+        is_active = ${service.is_active},
+        sort_order = ${service.sort_order}
+    WHERE id = ${id}`;
 }
 
-export function getBusinessHours(): BusinessHours[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT * FROM business_hours
-    ORDER BY CASE day_of_week
-      WHEN 'sunday' THEN 0
-      WHEN 'monday' THEN 1
-      WHEN 'tuesday' THEN 2
-      WHEN 'wednesday' THEN 3
-      WHEN 'thursday' THEN 4
-      WHEN 'friday' THEN 5
-      WHEN 'saturday' THEN 6
-    END
-  `).all() as BusinessHours[];
+// Delete service
+export async function deleteService(id: string) {
+  await sql`DELETE FROM services WHERE id = ${id}`;
 }
 
-export function updateBusinessHours(day: string, hours: Partial<BusinessHours>): void {
-  const db = getDb();
-  db.prepare(`
+// Get business hours
+export async function getBusinessHours() {
+  const result = await sql`SELECT * FROM business_hours ORDER BY 
+    CASE day_of_week
+      WHEN 'Monday' THEN 1
+      WHEN 'Tuesday' THEN 2
+      WHEN 'Wednesday' THEN 3
+      WHEN 'Thursday' THEN 4
+      WHEN 'Friday' THEN 5
+      WHEN 'Saturday' THEN 6
+      WHEN 'Sunday' THEN 7
+    END`;
+  return result.rows;
+}
+
+// Update business hours
+export async function updateBusinessHours(day: string, hours: any) {
+  await sql`
     UPDATE business_hours
-    SET open_time = COALESCE(@open_time, open_time),
-        close_time = COALESCE(@close_time, close_time),
-        is_enabled = COALESCE(@is_enabled, is_enabled)
-    WHERE day_of_week = @day_of_week
-  `).run({ ...hours, day_of_week: day });
+    SET is_open = ${hours.is_open},
+        open_time = ${hours.open_time},
+        close_time = ${hours.close_time}
+    WHERE day_of_week = ${day}`;
 }
 
-export function getBookings(filters?: { date?: string; status?: string }): Booking[] {
-  const db = getDb();
+// Get all bookings
+export async function getBookings(filters?: any) {
   let query = 'SELECT * FROM bookings WHERE 1=1';
-  const params: Record<string, string> = {};
-
+  const params: any[] = [];
+  
   if (filters?.date) {
-    query += ' AND booking_date = @date';
-    params.date = filters.date;
+    query += ` AND booking_date = $${params.length + 1}`;
+    params.push(filters.date);
   }
-
+  
   if (filters?.status) {
-    query += ' AND status = @status';
-    params.status = filters.status;
+    query += ` AND status = $${params.length + 1}`;
+    params.push(filters.status);
   }
-
-  query += ' ORDER BY booking_date, booking_time';
-
-  return db.prepare(query).all(params) as Booking[];
+  
+  query += ' ORDER BY booking_date DESC, booking_time DESC';
+  
+  const result = await sql.query(query, params);
+  return result.rows;
 }
 
-export function getBooking(id: string): Booking | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM bookings WHERE id = ?').get(id) as Booking | undefined;
+// Get booking by ID
+export async function getBookingById(id: string) {
+  const result = await sql`SELECT * FROM bookings WHERE id = ${id}`;
+  return result.rows[0] || null;
 }
 
-export function createBooking(booking: Omit<Booking, 'created_at' | 'updated_at'>): Booking {
-  const db = getDb();
-  db.prepare(`
-    INSERT INTO bookings (
-      id, service_id, booking_date, booking_time, duration,
-      customer_name, customer_email, customer_phone, notes, status, google_event_id
-    )
-    VALUES (
-      @id, @service_id, @booking_date, @booking_time, @duration,
-      @customer_name, @customer_email, @customer_phone, @notes, @status, @google_event_id
-    )
-  `).run(booking);
-  return getBooking(booking.id)!;
+// Create booking
+export async function createBooking(booking: any) {
+  await sql`
+    INSERT INTO bookings (id, service_id, customer_name, customer_email, customer_phone, booking_date, booking_time, status, notes)
+    VALUES (${booking.id}, ${booking.service_id}, ${booking.customer_name}, ${booking.customer_email}, ${booking.customer_phone}, ${booking.booking_date}, ${booking.booking_time}, ${booking.status}, ${booking.notes})`;
 }
 
-export function updateBooking(id: string, updates: Partial<Booking>): void {
-  const db = getDb();
-  const fields = Object.keys(updates).filter(k => k !== 'id');
-  const setClause = fields.map(f => `${f} = @${f}`).join(', ');
-  db.prepare(`UPDATE bookings SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = @id`).run({ ...updates, id });
+// Update booking
+export async function updateBooking(id: string, booking: any) {
+  await sql`
+    UPDATE bookings
+    SET service_id = ${booking.service_id},
+        customer_name = ${booking.customer_name},
+        customer_email = ${booking.customer_email},
+        customer_phone = ${booking.customer_phone},
+        booking_date = ${booking.booking_date},
+        booking_time = ${booking.booking_time},
+        status = ${booking.status},
+        notes = ${booking.notes}
+    WHERE id = ${id}`;
 }
 
-export function cancelBooking(id: string): void {
-  updateBooking(id, { status: 'cancelled' });
+// Delete booking
+export async function deleteBooking(id: string) {
+  await sql`DELETE FROM bookings WHERE id = ${id}`;
 }
 
-export function getAvailableSlots(date: string, serviceId: string): string[] {
-  const config = getConfig();
-  const service = getService(serviceId);
-  if (!service) return [];
+// Get bookings for a specific date
+export async function getBookingsByDate(date: string) {
+  const result = await sql`SELECT * FROM bookings WHERE booking_date = ${date} ORDER BY booking_time`;
+  return result.rows;
+}
 
-  const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-  const hours = getBusinessHours().find(h => h.day_of_week === dayOfWeek);
-  if (!hours?.is_enabled) return [];
-
-  const existingBookings = getBookings({ date, status: 'confirmed' });
-  const slots: string[] = [];
-
-  const [openHour, openMin] = hours.open_time.split(':').map(Number);
-  const [closeHour, closeMin] = hours.close_time.split(':').map(Number);
-
-  let currentTime = openHour * 60 + openMin;
-  const closeTime = closeHour * 60 + closeMin;
-
-  while (currentTime + service.duration <= closeTime) {
-    const timeStr = `${Math.floor(currentTime / 60).toString().padStart(2, '0')}:${(currentTime % 60).toString().padStart(2, '0')}`;
-
-    const hasConflict = existingBookings.some(b => {
-      const bookingStart = parseInt(b.booking_time.split(':')[0]) * 60 + parseInt(b.booking_time.split(':')[1]);
-      const bookingEnd = bookingStart + b.duration + config.buffer_minutes;
-      const slotEnd = currentTime + service.duration;
-
-      return (currentTime < bookingEnd && slotEnd > bookingStart);
-    });
-
-    if (!hasConflict && existingBookings.length < config.max_bookings_per_day) {
-      slots.push(timeStr);
-    }
-
-    currentTime += 30; // 30-minute increments
-  }
-
-  return slots;
+// Check if time slot is available
+export async function isTimeSlotAvailable(serviceId: string, date: string, time: string) {
+  const result = await sql`
+    SELECT COUNT(*) as count
+    FROM bookings
+    WHERE service_id = ${serviceId}
+      AND booking_date = ${date}
+      AND booking_time = ${time}
+      AND status != 'cancelled'`;
+  return result.rows[0].count === 0;
 }
