@@ -1,5 +1,19 @@
 import { sql } from '@vercel/postgres';
 
+// Booking type definition
+export interface Booking {
+  id: string;
+  service_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  booking_date: string;
+  booking_time: string;
+  status: string;
+  notes?: string;
+  created_at?: string;
+}
+
 // Track initialization state
 let isInitialized = false;
 
