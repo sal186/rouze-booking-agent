@@ -47,15 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Send confirmation email
     try {
-      await sendBookingConfirmation({
-        customerName,
-        customerEmail,
-        serviceName: service.name,
-        date,
-        time,
-        price: service.price,
-      });
-    } catch (emailError) {
+      await sendBookingConfirmation(booking, service);
       console.error('Failed to send email:', emailError);
       // Don't fail the booking if email fails
     }
