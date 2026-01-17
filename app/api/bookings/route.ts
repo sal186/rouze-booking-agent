@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create booking in database
-    const booking = createBooking({
+    const booking = await createBooking({
       serviceId,
       serviceName: service.name,
       date,
