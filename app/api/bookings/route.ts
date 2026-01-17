@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createBooking, getAllBookings } from '@/lib/db';
 import { sendBookingConfirmation } from '@/lib/email';
 
+// Force dynamic rendering - prevents build-time execution
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 const SERVICES = {
   haircut: { name: 'Haircut', duration: 30, price: 50 },
   coloring: { name: 'Hair Coloring', duration: 90, price: 120 },
