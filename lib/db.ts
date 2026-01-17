@@ -160,7 +160,7 @@ export async function updateBusinessHours(day: string, hours: any) {
 }
 
 // Get all bookings
-export async function getBookings(filters?: any) {
+export async function getAllBookings(filters?: any) {
   let query = 'SELECT * FROM bookings WHERE 1=1';
   const params: any[] = [];
   
