@@ -36,19 +36,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Create booking in database
-    const booking = await createBooking({
-      serviceId,
-      serviceName: service.name,
-      date,
-      time,
-      customerName,
-      customerEmail,
-      customerPhone,
-      price: service.price,
-      duration: service.duration,
-      status: 'confirmed',
-    });
-
+          // Generate unique booking ID
+    const bookingId = `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Prepare booking data matching Booking interface
+    const bookingData = {
+      id: bookingId,
+      service_id: serviceId,
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      booking_date: date,
+      booking_time: time,
+      status: 'confirmed' as const,
+    };
+    
+    // Save to database
+    await createBooking(bookingData);
     // Send confirmation email
     try {
       await sendBookingConfirmation(booking, service);
