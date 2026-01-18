@@ -18,8 +18,7 @@ function getCalendar() {
 
 export async function createCalendarEvent(booking: Booking, service: Service): Promise<string | null> {
   const calendar = getCalendar();
-  const config = getConfig();
-
+  const config = await getConfig();
   if (!calendar || !config.google_calendar_id) {
     console.log('Google Calendar not configured, skipping event creation');
     return null;
