@@ -11,6 +11,7 @@ export interface Booking {
   booking_time: string;
   status: string;
   notes?: string;
+    google_event_id?: string;
   created_at?: string;
 }
 
@@ -96,6 +97,7 @@ async function initializeDb() {
       booking_time TEXT NOT NULL,
       status TEXT DEFAULT 'confirmed',
       notes TEXT,
+          google_event_id TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (service_id) REFERENCES services(id)
     )`;
