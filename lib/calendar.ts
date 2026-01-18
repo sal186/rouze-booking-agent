@@ -76,8 +76,7 @@ ${booking.notes ? `- Notes: ${booking.notes}\n` : ''}
 
 export async function updateCalendarEvent(booking: Booking, service: Service): Promise<void> {
   const calendar = getCalendar();
-  const config = getConfig();
-
+  const config = await getConfig();
   if (!calendar || !config.google_calendar_id || !booking.google_event_id) {
     return;
   }
@@ -117,8 +116,7 @@ ${booking.notes ? `- Notes: ${booking.notes}\n` : ''}
 
 export async function deleteCalendarEvent(booking: Booking): Promise<void> {
   const calendar = getCalendar();
-  const config = getConfig();
-
+  const config = await getConfig();
   if (!calendar || !config.google_calendar_id || !booking.google_event_id) {
     return;
   }
@@ -137,8 +135,7 @@ export async function deleteCalendarEvent(booking: Booking): Promise<void> {
 // Get busy times from Google Calendar for availability checking
 export async function getCalendarBusyTimes(date: string): Promise<{ start: string; end: string }[]> {
   const calendar = getCalendar();
-  const config = getConfig();
-
+  const config = await getConfig();
   if (!calendar || !config.google_calendar_id) {
     return [];
   }
