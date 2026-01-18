@@ -5,7 +5,7 @@ import { getConfig, Booking, Service } from './db';
 function getTransporter() {
   // For production, use your SMTP service (SendGrid, Resend, etc.)
   if (process.env.SMTP_HOST) {
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
@@ -17,7 +17,7 @@ function getTransporter() {
   }
 
   // For development, use Ethereal (fake SMTP)
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
     auth: {
