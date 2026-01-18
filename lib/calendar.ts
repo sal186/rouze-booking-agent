@@ -25,7 +25,7 @@ export async function createCalendarEvent(booking: Booking, service: Service): P
   }
 
   const startDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00`);
-  const endDateTime = new Date(startDateTime.getTime() + booking.duration * 60000);
+  const endDateTime = new Date(startDateTime.getTime() + service.duration * 60000);
 
   try {
     const event = await calendar.events.insert({
@@ -83,7 +83,7 @@ export async function updateCalendarEvent(booking: Booking, service: Service): P
   }
 
   const startDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00`);
-  const endDateTime = new Date(startDateTime.getTime() + booking.duration * 60000);
+  const endDateTime = new Date(startDateTime.getTime() + service.duration * 60000);
 
   try {
     await calendar.events.update({
