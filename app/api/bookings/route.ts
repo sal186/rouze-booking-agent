@@ -60,9 +60,11 @@ export async function POST(request: NextRequest) {
             console.error('Failed to send email:', emailError);
       // Don't fail the booking if email fails
     }
+
+    return NextResponse.json({
       success: true,
-      bookingData,    });
-  } catch (error) {
+      booking: bookingData
+    });  } catch (error) {
     console.error('Booking error:', error);
     return NextResponse.json(
       { error: 'Failed to create booking' },
