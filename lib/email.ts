@@ -44,7 +44,7 @@ function formatDate(dateStr: string): string {
 }
 
 export async function sendBookingConfirmation(booking: Booking, service: Service): Promise<void> {
-  const config = getConfig();
+  const config = await getConfig();
   const transporter = getTransporter();
 
   if (!config.business_email && !process.env.SMTP_FROM) {
@@ -171,7 +171,7 @@ export async function sendBookingConfirmation(booking: Booking, service: Service
 }
 
 export async function sendCancellationEmail(booking: Booking, service: Service): Promise<void> {
-  const config = getConfig();
+  const config = await getConfig();
   const transporter = getTransporter();
 
   if (!booking.customer_email) return;
