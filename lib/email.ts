@@ -98,7 +98,7 @@ export async function sendBookingConfirmation(booking: Booking, service: Service
               </div>
               <div class="detail-row">
                 <span class="detail-label">Duration</span>
-                <span class="detail-value">${booking.duration} minutes</span>
+                <span class="detail-value">${service.duration} minutes</span>
               </div>
               ${service.price > 0 ? `
               <div class="detail-row" style="border-bottom: none;">
@@ -148,7 +148,7 @@ export async function sendBookingConfirmation(booking: Booking, service: Service
             <p><strong>Service:</strong> ${service.name}</p>
             <p><strong>Date:</strong> ${formatDate(booking.booking_date)}</p>
             <p><strong>Time:</strong> ${formatTime(booking.booking_time)}</p>
-            <p><strong>Duration:</strong> ${booking.duration} minutes</p>
+            <p><strong>Duration:</strong> ${service.duration} minutes</p>
             ${booking.notes ? `<p><strong>Notes:</strong> ${booking.notes}</p>` : ''}
           </div>
         </div>
